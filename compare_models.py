@@ -29,11 +29,11 @@ if analysis_type == "Team":
 else:
     st.markdown("""
     ### Input Format
-    Enter a list of player IDs and their corresponding leagues in the following format:
+    Enter a list of team IDs, player IDs, and their corresponding leagues in the following format:
     ```
     [
-        ["player_id_1", "NBA"],
-        ["player_id_2", "WNBA"]
+        ["team_id_1", "player_id_1", "NBA"],
+        ["team_id_2", "player_id_2", "WNBA"]
     ]
     ```
     """)
@@ -44,11 +44,17 @@ input_data = st.text_area(f"Enter {analysis_type} IDs and League List", height=2
 # Parse input
 try:
     id_league_list = eval(input_data)  # Parse input safely
-    if not isinstance(id_league_list, list) or not all(isinstance(item, list) and len(item) == 2 for item in id_league_list):
-        raise ValueError
+    if analysis_type == "Team":
+        # Validate team input
+        if not isinstance(id_league_list, list) or not all(isinstance(item, list) and len(item) == 2 for item in id_league_list):
+            raise ValueError
+    else:
+        # Validate player input
+        if not isinstance(id_league_list, list) or not all(isinstance(item, list) and len(item) == 3 for item in id_league_list):
+            raise ValueError
 except:
     id_league_list = []
-    st.error("Invalid format. Please ensure the input is a list of lists as described.")
+    st.error("Invalid format. Please ensure the input matches the specified format.")
 
 # Button to trigger API calls
 if st.button("Compare Models"):
@@ -63,19 +69,34 @@ if st.button("Compare Models"):
         # Initialize a list to collect results
         results_data = []
 
-        for entity_id, league in id_league_list:
-            # Common parameters
-            params = {
-                "season": "24",
-                "emojis": "false",
-                "mocked_response": "false",
-                "html": "true",
-                "prompt_id": "PROMPT_1",
-                "response_type": "html",
-                "external_stats": "true",
-                analysis_type.lower(): entity_id,  # Use 'team' or 'player' dynamically
-                "league": league
-            }
+        for entry in id_league_list:
+            if analysis_type == "Team":
+                team_id, league = entry
+                params = {
+                    "season": "24",
+                    "emojis": "false",
+                    "mocked_response": "false",
+                    "html": "true",
+                    "prompt_id": "PROMPT_1",
+                    "response_type": "html",
+                    "external_stats": "true",
+                    "team": team_id,
+                    "league": league
+                }
+            else:  # Player analysis
+                team_id, player_id, league = entry
+                params = {
+                    "season": "24",
+                    "emojis": "false",
+                    "mocked_response": "false",
+                    "html": "true",
+                    "prompt_id": "PROMPT_1",
+                    "response_type": "html",
+                    "external_stats": "true",
+                    "team": team_id,
+                    "player": player_id,
+                    "league": league
+                }
 
             headers = {
                 "Authorization": f"Bearer {auth_token}"
@@ -95,20 +116,22 @@ if st.button("Compare Models"):
                     results[model] = f"Error: {str(e)}"
 
             # Add results to the list
-            results_data.append({
-                "id": entity_id,
+            result_entry = {
+                "id": team_id if analysis_type == "Team" else player_id,
+                "team": team_id if analysis_type == "Player" else None,
                 "league": league,
                 "gpt4": results.get("gpt-4o", "No data"),
                 "mini": results.get("gpt-4o-mini", "No data")
-            })
+            }
+            results_data.append(result_entry)
 
             # Display results side-by-side
             with col1:
-                st.subheader(f"{league} - {entity_id} (GPT-4o)")
+                st.subheader(f"{league} - {entry[0]} (GPT-4o)")
                 st.markdown(results.get("gpt-4o", "No data"), unsafe_allow_html=True)
 
             with col2:
-                st.subheader(f"{league} - {entity_id} (GPT-4o-mini)")
+                st.subheader(f"{league} - {entry[0]} (GPT-4o-mini)")
                 st.markdown(results.get("gpt-4o-mini", "No data"), unsafe_allow_html=True)
 
         # Convert the list of results to a DataFrame
